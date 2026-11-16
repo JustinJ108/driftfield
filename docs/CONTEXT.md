@@ -47,11 +47,13 @@ Measured (headless Chrome, 1280×760):
 4. Mobile/touch not attempted.
 
 ## Log
+- **2026-11-15** — Published: git repo initialized, pushed to
+  `github.com/JustinJ108/driftfield` (public), GitHub Pages from `main`/`docs` serving
+  `docs/index.html` (single-file build).
 - **2026-11-15** — Tuning/polish: asteroids halved (78/7), hull 3 vs raider bolts with
   invuln+feedback (rocks still fatal), raiders made occasional and easier (1 at a time,
   long gaps, 1-hit kill, larger/slower/less accurate), HUD hull. Fixed space-keyup
-  restart/points-reset bug by blurring on run start + preventing Space keyup default.
-  Headless QA green. User confirmed Chrome hardware acceleration is off.
+  restart/points-reset bug. Headless QA green. User confirmed Chrome acceleration off.
 - **2026-11-15** — Combat/cargo/audio: ore-as-cargo docked at station, raiders, Space
   cannons, Web Audio SFX + mute, density reduced 250→155, HUD/station marker/threat.
 - **2026-11-15** — Feel/fairness, initial scaffold, and launch/WebGL/standalone fixes.
