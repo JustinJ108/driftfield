@@ -111,6 +111,26 @@
       <div id="crosshair"></div>
     </div>
 
+    <div id="touch-controls" class="is-hidden" aria-hidden="true">
+      <div id="touch-joystick" class="touch-zone" aria-label="Steer">
+        <div class="joy-base">
+          <div class="joy-knob" id="joy-knob"></div>
+        </div>
+        <span class="touch-label">steer</span>
+      </div>
+      <div id="touch-actions" class="touch-zone">
+        <button type="button" class="touch-btn touch-btn-fire" id="touch-fire">fire</button>
+        <div class="touch-row">
+          <button type="button" class="touch-btn" id="touch-throttle-up">thr ▲</button>
+          <button type="button" class="touch-btn" id="touch-throttle-down">thr ▼</button>
+        </div>
+        <div class="touch-row">
+          <button type="button" class="touch-btn" id="touch-boost">boost</button>
+          <button type="button" class="touch-btn touch-btn-small" id="touch-mute">mute</button>
+        </div>
+      </div>
+    </div>
+
     <div id="panel" class="panel">
       <h1>DRIFTFIELD</h1>
       <p class="tagline">
@@ -128,7 +148,7 @@
       </ul>
 
       <button id="launch">Launch</button>
-      <p class="footnote" id="panel-footnote">click launches and captures the mouse &middot; esc releases it</p>
+      <p class="footnote" id="panel-footnote">click or tap to launch &middot; mouse/keys or on-screen controls &middot; esc pauses on desktop</p>
       <button id="diag-toggle" type="button">trouble starting?</button>
 
       <div id="boot-error" hidden>

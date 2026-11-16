@@ -57,6 +57,7 @@ If it still won't start, check the browser console (F12) and report the first re
 | `Arrows` | Keyboard steering (down climbs, matching the mouse) |
 | `M` | Toggle sound |
 | `R` | Relaunch after a crash |
+| Touch | On-screen joystick to steer (down climbs) + buttons for fire, throttle, boost, mute |
 | Red ore | Fly through to load cargo (safe to touch) |
 | Station ring | Fly inside to bank cargo for points; unbanked cargo is lost on a crash |
 

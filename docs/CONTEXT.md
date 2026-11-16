@@ -44,9 +44,11 @@ Measured (headless Chrome, 1280×760):
 1. Play on a real GPU and tune `SHIP`, field/station/raider params by feel.
 2. Polish combat/docking feedback if needed (clearer hit/telegraph cues).
 3. Consider difficulty ramp with distance/time.
-4. Mobile/touch not attempted.
+4. Refine mobile/touch controls on real devices (layout/sensitivity).
 
 ## Log
+- **2026-11-15** — Mobile/touch controls added: on-screen joystick (steer) and buttons
+  (fire/throttle/boost/mute), touch-aware input/pause behavior; rebuilt and updated site.
 - **2026-11-15** — Published: git repo initialized, pushed to
   `github.com/JustinJ108/driftfield` (public), GitHub Pages from `main`/`docs` serving
   `docs/index.html` (single-file build).

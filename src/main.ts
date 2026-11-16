@@ -169,6 +169,31 @@ const keys = new Set<string>();
 /** Mouse steering, treated as a decaying impulse so the ship self-centres. */
 const steer = { pitch: 0, yaw: 0 };
 
+/** Touch controls: virtual joystick + hold buttons (mobile/coarse pointers). */
+const isTouchDevice =
+  'ontouchstart' in window ||
+  navigator.maxTouchPoints > 0 ||
+  window.matchMedia('(pointer: coarse)').matches;
+
+const touchControls = document.getElementById('touch-controls') as HTMLElement | null;
+const touchJoystick = document.getElementById('touch-joystick') as HTMLElement | null;
+const joyKnob = document.getElementById('joy-knob') as HTMLElement | null;
+const touchFireBtn = document.getElementById('touch-fire') as HTMLButtonElement | null;
+const touchBoostBtn = document.getElementById('touch-boost') as HTMLButtonElement | null;
+const touchThrottleUpBtn = document.getElementById('touch-throttle-up') as HTMLButtonElement | null;
+const touchThrottleDownBtn = document.getElementById('touch-throttle-down') as HTMLButtonElement | null;
+const touchMuteBtn = document.getElementById('touch-mute') as HTMLButtonElement | null;
+
+const touch = {
+  fire: false,
+  boost: false,
+  throttleUp: false,
+  throttleDown: false,
+  joyId: null as number | null,
+  joyCenterX: 0,
+  joyCenterY: 0,
+};
+
 const input: ShipInput = {
   pitch: 0,
   yaw: 0,
@@ -241,6 +266,8 @@ window.addEventListener('blur', () => keys.clear());
 
 window.addEventListener('mousemove', (event) => {
   if (state !== 'flying' || paused) return;
+  // Ignore emulated mouse moves from touch input.
+  if (isTouchDevice && event.movementX === 0 && event.movementY === 0) return;
   // Pointer lock is the preferred mode, but a browser (or an embedding host) can
   // refuse it. `movementX/Y` is populated on plain mousemove too, so steering
   // must not depend on holding the lock: otherwise a refusal silently leaves the
@@ -252,6 +279,127 @@ window.addEventListener('mousemove', (event) => {
   steer.yaw = clamp(steer.yaw - event.movementX * 0.0032, -1.3, 1.3);
 });
 
+function setTouchVisible(visible: boolean): void {
+  if (!touchControls) return;
+  touchControls.classList.toggle('is-hidden', !visible);
+}
+
+function syncTouchControlsVisibility(): void {
+  if (!isTouchDevice) return;
+  // Show controls during play and on crash (so user can see them) but hide on title.
+  setTouchVisible(state !== 'title');
+}
+
+function setTouchButtonPressed(btn: HTMLButtonElement | null, pressed: boolean): void {
+  if (!btn) return;
+  btn.classList.toggle('is-pressed', pressed);
+}
+
+function resetTouchState(): void {
+  touch.fire = false;
+  touch.boost = false;
+  touch.throttleUp = false;
+  touch.throttleDown = false;
+  touch.joyId = null;
+  if (joyKnob) joyKnob.style.transform = 'translate(0px, 0px)';
+  touchJoystick?.classList.remove('is-active');
+  setTouchButtonPressed(touchFireBtn, false);
+  setTouchButtonPressed(touchBoostBtn, false);
+  setTouchButtonPressed(touchThrottleUpBtn, false);
+  setTouchButtonPressed(touchThrottleDownBtn, false);
+}
+
+function bindHoldButton(
+  btn: HTMLButtonElement | null,
+  set: (v: boolean) => void,
+): void {
+  if (!btn) return;
+  const down = (event: PointerEvent) => {
+    event.preventDefault();
+    audio.unlock();
+    try {
+      btn.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Synthetic or inactive pointers can throw; hold state still works.
+    }
+    set(true);
+    setTouchButtonPressed(btn, true);
+  };
+  const up = (event?: PointerEvent) => {
+    if (event) event.preventDefault();
+    set(false);
+    setTouchButtonPressed(btn, false);
+  };
+  btn.addEventListener('pointerdown', down);
+  btn.addEventListener('pointerup', up);
+  btn.addEventListener('pointercancel', up);
+  btn.addEventListener('pointerleave', (e) => {
+    if (e.buttons === 0) up(e);
+  });
+}
+
+bindHoldButton(touchFireBtn, (v) => (touch.fire = v));
+bindHoldButton(touchBoostBtn, (v) => (touch.boost = v));
+bindHoldButton(touchThrottleUpBtn, (v) => (touch.throttleUp = v));
+bindHoldButton(touchThrottleDownBtn, (v) => (touch.throttleDown = v));
+
+touchMuteBtn?.addEventListener('click', (event) => {
+  event.preventDefault();
+  audio.unlock();
+  const muted = audio.toggleMute();
+  hud.popup(muted ? 'sound off' : 'sound on', muted ? 'warn' : 'ore');
+});
+
+if (touchJoystick && joyKnob) {
+  const radius = 44;
+  touchJoystick.addEventListener('pointerdown', (event) => {
+    if (state !== 'flying' || paused) return;
+    event.preventDefault();
+    audio.unlock();
+    touch.joyId = event.pointerId;
+    const rect = touchJoystick.getBoundingClientRect();
+    touch.joyCenterX = rect.left + rect.width / 2;
+    touch.joyCenterY = rect.top + rect.height / 2;
+    touchJoystick.classList.add('is-active');
+    try {
+      touchJoystick.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Safe to continue without capture.
+    }
+  });
+
+  touchJoystick.addEventListener('pointermove', (event) => {
+    if (touch.joyId !== event.pointerId) return;
+    event.preventDefault();
+    const dx = event.clientX - touch.joyCenterX;
+    const dy = event.clientY - touch.joyCenterY;
+    const dist = Math.hypot(dx, dy) || 1;
+    const clamped = Math.min(dist, radius);
+    const nx = (dx / dist) * clamped;
+    const ny = (dy / dist) * clamped;
+    joyKnob.style.transform = `translate(${nx}px, ${ny}px)`;
+    // Map deflection to steering impulse (scaled like mouse). Pull down climbs.
+    const normX = nx / radius;
+    const normY = ny / radius;
+    steer.yaw = clamp(steer.yaw - normX * 0.09, -1.3, 1.3);
+    steer.pitch = clamp(steer.pitch + normY * 0.09, -1.3, 1.3);
+  });
+
+  const endJoy = (event: PointerEvent) => {
+    if (touch.joyId !== event.pointerId) return;
+    event.preventDefault();
+    touch.joyId = null;
+    joyKnob.style.transform = 'translate(0px, 0px)';
+    touchJoystick.classList.remove('is-active');
+  };
+  touchJoystick.addEventListener('pointerup', endJoy);
+  touchJoystick.addEventListener('pointercancel', endJoy);
+}
+
+if (isTouchDevice) {
+  setTouchVisible(false);
+}
+
 canvas.addEventListener('click', () => {
   if (state !== 'flying') return;
   // A click always resumes: pointer lock is a nicety, not a requirement, so a
@@ -261,7 +409,7 @@ canvas.addEventListener('click', () => {
     hud.setPaused(false);
     lastFrame = performance.now();
   }
-  if (document.pointerLockElement !== canvas) requestPointerLock();
+  if (!isTouchDevice && document.pointerLockElement !== canvas) requestPointerLock();
 });
 
 document.addEventListener('pointerlockchange', () => {
@@ -283,6 +431,7 @@ document.addEventListener('pointerlockchange', () => {
 /** Say so when mouse look is refused, so "the controls do nothing" is legible. */
 function notePointerLockUnavailable(): void {
   if (state !== 'flying' || paused) return;
+  if (isTouchDevice) return;
   hud.setHint('mouse look is blocked here · arrow keys steer');
 }
 
@@ -329,6 +478,7 @@ function startRun(): void {
   // A focused Launch/Relaunch button can be "clicked" by Space on keyup, which
   // would silently restart the run and wipe progress.
   (document.activeElement as HTMLElement | null)?.blur?.();
+  resetTouchState();
   raiders.reset();
   station.placeAhead(ship.position, ship.forward, 620);
   field.clearSphere(station.position, STATION_CLEAR_RADIUS);
@@ -337,13 +487,18 @@ function startRun(): void {
   hud.setCargo(0);
   hud.setPoints(0);
   hud.setHull(hull);
-  requestPointerLock();
+  syncTouchControlsVisibility();
+  if (isTouchDevice) {
+    hud.setHint('touch: left stick steers · buttons fire/throttle/boost');
+  } else {
+    requestPointerLock();
+  }
 
   // Some browsers reject the lock without firing `pointerlockerror`. If the
   // game is running unlocked, the mouse still steers, but the player deserves
   // to know mouse look is off.
   window.setTimeout(() => {
-    if (state === 'flying' && !paused && document.pointerLockElement !== canvas) {
+    if (!isTouchDevice && state === 'flying' && !paused && document.pointerLockElement !== canvas) {
       notePointerLockUnavailable();
     }
   }, 700);
@@ -361,6 +516,8 @@ function crash(): void {
   nearMissCooldown = 0;
   ship.halt();
   raiders.stop();
+  resetTouchState();
+  syncTouchControlsVisibility();
   audio.crash();
   chase.addShake(1.7);
   hud.flash();
@@ -381,12 +538,17 @@ function fixedStep(dt: number): void {
   // Arrows follow the stick too: pulling back (ArrowDown) climbs.
   const keyPitch = (keys.has('ArrowDown') ? 1 : 0) - (keys.has('ArrowUp') ? 1 : 0);
   const keyYaw = (keys.has('ArrowLeft') ? 1 : 0) - (keys.has('ArrowRight') ? 1 : 0);
+  const touchThrottle = (touch.throttleUp ? 1 : 0) - (touch.throttleDown ? 1 : 0);
 
   input.pitch = clamp(steer.pitch + keyPitch, -1, 1);
   input.yaw = clamp(steer.yaw + keyYaw, -1, 1);
   input.roll = (keys.has('KeyA') ? 1 : 0) - (keys.has('KeyD') ? 1 : 0);
-  input.throttle = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0);
-  input.boost = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  input.throttle = clamp(
+    (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0) + touchThrottle,
+    -1,
+    1,
+  );
+  input.boost = keys.has('ShiftLeft') || keys.has('ShiftRight') || touch.boost;
 
   // Let the mouse impulse bleed off so releasing the mouse settles the nose.
   const decay = Math.exp(-12 * dt);
@@ -413,7 +575,7 @@ function fixedStep(dt: number): void {
     chase.addShake(0.18);
   }
 
-  raiders.update(dt, ship, keys.has('Space'), raiderEvents);
+  raiders.update(dt, ship, keys.has('Space') || touch.fire, raiderEvents);
   if (state !== 'flying') return;
 
   const insideStation = station.contains(ship.position);
@@ -483,10 +645,12 @@ function frame(now: number): void {
     crashTimer += dt;
     if (crashTimer > 0.45 && !hud.crashedPanelVisible) {
       hud.showCrashed(distance, best, oreCollected, points, cargo);
+      syncTouchControlsVisibility();
     }
   }
 
   station.animate(dt);
+  syncTouchControlsVisibility();
 
   const speed01 = clamp01(
     (ship.speed - SHIP.brakeSpeed) / (SHIP.boostSpeed - SHIP.brakeSpeed),
