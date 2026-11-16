@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#05070d" />
+    <link rel="icon" href="data:," />
+    <title>Driftfield</title>
+    <script>
+      // Runs before anything else so a failure anywhere is reportable.
+      // Deliberately ES5: this is the code that has to work on a broken page.
+      (function () {
+        var errors = [];
+
+        window.addEventListener('error', function (event) {
+          var where = event.filename ? String(event.filename).split('/').pop() : '';
+          errors.push((event.message || 'script error') + (where ? ' @ ' + where + ':' + event.lineno : ''));
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event.reason;
+          errors.push('promise: ' + (reason && reason.message ? reason.message : String(reason)));
+        });
+
+        function glInfo(kind) {
+          try {
+            var gl = document.createElement('canvas').getContext(kind);
+            if (!gl) return 'unavailable';
+            var debug = gl.getExtension('WEBGL_debug_renderer_info');
+            var name = debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+            return 'ok (' + name + ')';
+          } catch (error) {
+            return 'error: ' + error.message;
+          }
+        }
+
+        window.__driftfieldDiag = function (reason) {
+          var lines = [
+            'reason      ' + (reason || 'unknown'),
+            'browser     ' + navigator.userAgent,
+            'page        ' + location.href,
+            'webgl 2     ' + glInfo('webgl2'),
+            'webgl 1     ' + glInfo('webgl'),
+            'pointerlock ' + (document.pointerLockElement ? 'locked' : 'not locked'),
+            'game ready  ' + (window.__driftfieldReady === true ? 'yes' : 'no'),
+          ];
+          if (errors.length > 0) lines.push('errors      ' + errors.slice(0, 4).join(' | '));
+          return lines.join('\n');
+        };
+      })();
+    </script>
+  </head>
+  <body>
+    <script>
+      // This file is the dev-server entry point. Opened straight from disk the
+      // browser blocks its module script, so hand the player to the standalone
+      // build that sits next to it (`npm run build` writes it). The filename
+      // check stops the standalone copy from redirecting to itself.
+      if (location.protocol === 'file:' && !location.pathname.endsWith('/Driftfield.html')) {
+        location.replace(new URL('Driftfield.html', location.href).href);
+      }
+    </script>
+
+    <canvas id="scene"></canvas>
+
+    <div id="vignette"></div>
+    <div id="flash"></div>
+
+    <div id="hud" class="is-hidden">
+      <div class="hud-block hud-left">
+        <div class="stat">
+          <span class="label">velocity</span>
+          <span class="value" id="hud-speed">0</span>
+          <span class="unit">m/s</span>
+        </div>
+        <div class="bar"><i id="hud-bar"></i></div>
+        <div class="stat stat-small stat-hull">
+          <span class="label">hull</span>
+          <span class="value" id="hud-hull">3</span>
+        </div>
+      </div>
+
+      <div class="hud-block hud-right">
+        <div class="stat">
+          <span class="label">distance</span>
+          <span class="value" id="hud-dist">0</span>
+          <span class="unit" id="hud-dist-unit">m</span>
+        </div>
+        <div class="stat stat-small">
+          <span class="label">best</span>
+          <span class="value" id="hud-best">0</span>
+          <span class="unit" id="hud-best-unit">m</span>
+        </div>
+        <div class="stat stat-small stat-cargo">
+          <span class="label">ore</span>
+          <span class="value" id="hud-ore">0</span>
+        </div>
+        <div class="stat stat-small stat-points">
+          <span class="label">points</span>
+          <span class="value" id="hud-points">0</span>
+        </div>
+      </div>
+
+      <div id="hud-threat">raider</div>
+      <div id="hud-nearmiss">near miss</div>
+      <div id="hud-popup"></div>
+      <div id="station-marker" class="is-hidden">
+        <span class="station-ring"></span>
+        <span class="marker-label">station <b id="station-dist">0</b> m</span>
+      </div>
+      <div id="hud-hint">mouse steer &middot; W/S throttle &middot; space fire &middot; shift burn</div>
+      <div id="crosshair"></div>
+    </div>
+
+    <div id="panel" class="panel">
+      <h1>DRIFTFIELD</h1>
+      <p class="tagline">
+        An endless asteroid field. Thread the gaps, shoot back, and fly red ore
+        into the station ring to bank it.
+      </p>
+
+      <ul class="keys">
+        <li><kbd>mouse</kbd><span>pitch &amp; yaw &middot; down climbs</span></li>
+        <li><kbd>space</kbd><span>cannons</span></li>
+        <li><kbd>A</kbd><kbd>D</kbd><span>roll</span></li>
+        <li><kbd>W</kbd><kbd>S</kbd><span>throttle</span></li>
+        <li><kbd>shift</kbd><span>afterburner</span></li>
+        <li><kbd>M</kbd><span>sound on / off</span></li>
+      </ul>
+
+      <button id="launch">Launch</button>
+      <p class="footnote" id="panel-footnote">click launches and captures the mouse &middot; esc releases it</p>
+      <button id="diag-toggle" type="button">trouble starting?</button>
+
+      <div id="boot-error" hidden>
+        <p>
+          <b id="boot-title">The game didn't start.</b>
+          <span id="boot-summary">Open <code>Driftfield.html</code> instead.</span>
+        </p>
+        <p id="boot-detail">
+          That single file is the whole game (JavaScript, styles, everything). Double-click
+          it — no server needed. Rebuild it with <code>npm run build</code>.
+        </p>
+        <p class="small" data-message>
+          This page is the dev entry point and needs <code>npm run dev</code> plus
+          <code>http://localhost:5173</code>; browsers block its module script on
+          <code>file://</code> URLs.
+        </p>
+        <pre id="boot-diag" hidden></pre>
+      </div>
+    </div>
+
+    <div id="gameover" class="panel is-hidden">
+      <h1 class="small">HULL BREACH</h1>
+      <p class="tagline">You threaded <b id="go-dist">0 m</b> of field before the hull gave out.</p>
+      <div class="result">
+        <span>best</span>
+        <b id="go-best">0 m</b>
+      </div>
+      <div class="result">
+        <span>ore</span>
+        <b id="go-ore">0</b>
+        <span>banked</span>
+        <b id="go-points">0</b>
+      </div>
+      <p class="result-lost" id="go-lost" hidden></p>
+      <button id="relaunch">Relaunch</button>
+      <p class="footnote">press <kbd>R</kbd> to go again</p>
+    </div>
+  </body>
+  <script type="module" src="/src/main.ts"></script>
+  <script>
+    // If the module never boots (file:// open, dev server down, wrong MIME type,
+    // JavaScript disabled by an extension), say so instead of leaving a Launch
+    // button that quietly does nothing — and print the details needed to fix it.
+    setTimeout(function () {
+      // A fatal startup error has already explained itself; don't overwrite it
+      // with the generic "bundle never loaded" story.
+      if (window.__driftfieldReady || window.__driftfieldFatal) return;
+      var box = document.getElementById('boot-error');
+      if (box) box.hidden = false;
+      showDiagnostics('the game bundle never finished loading');
+      var button = document.getElementById('launch');
+      if (button) button.disabled = true;
+    }, 1800);
+
+    var diagOpen = false;
+
+    function showDiagnostics(reason) {
+      var pre = document.getElementById('boot-diag');
+      if (!pre) return;
+      pre.textContent = window.__driftfieldDiag
+        ? window.__driftfieldDiag(reason)
+        : 'reason      ' + reason + '\nbrowser     ' + navigator.userAgent + '\npage        ' + location.href;
+      pre.hidden = false;
+      diagOpen = true;
+    }
+
+    // Reachable even when the game boots: a screen that loads fine but will not
+    // launch is exactly the case that used to produce no information at all.
+    document.getElementById('diag-toggle').addEventListener('click', function () {
+      var pre = document.getElementById('boot-diag');
+      if (diagOpen || (pre && !pre.hidden)) {
+        if (pre) pre.hidden = true;
+        diagOpen = false;
+        return;
+      }
+      var box = document.getElementById('boot-error');
+      if (box) box.hidden = false;
+      showDiagnostics(window.__driftfieldFatal || 'diagnostics requested from the title screen');
+    });
+  </script>
+</html>
