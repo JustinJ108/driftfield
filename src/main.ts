@@ -192,6 +192,8 @@ const touch = {
   joyId: null as number | null,
   joyCenterX: 0,
   joyCenterY: 0,
+  joyX: 0,
+  joyY: 0,
 };
 
 const input: ShipInput = {
@@ -275,8 +277,8 @@ window.addEventListener('mousemove', (event) => {
   //
   // Flight-stick pitch: pulling the mouse *down* (movementY > 0) climbs, the way
   // a yoke works. This is the one sign that feels wrong if you expect FPS look.
-  steer.pitch = clamp(steer.pitch + event.movementY * 0.0032, -1.3, 1.3);
-  steer.yaw = clamp(steer.yaw - event.movementX * 0.0032, -1.3, 1.3);
+  steer.pitch = clamp(steer.pitch + event.movementY * 0.0055, -1.3, 1.3);
+  steer.yaw = clamp(steer.yaw - event.movementX * 0.0055, -1.3, 1.3);
 });
 
 function setTouchVisible(visible: boolean): void {
@@ -301,6 +303,8 @@ function resetTouchState(): void {
   touch.throttleUp = false;
   touch.throttleDown = false;
   touch.joyId = null;
+  touch.joyX = 0;
+  touch.joyY = 0;
   if (joyKnob) joyKnob.style.transform = 'translate(0px, 0px)';
   touchJoystick?.classList.remove('is-active');
   setTouchButtonPressed(touchFireBtn, false);
@@ -366,29 +370,34 @@ if (touchJoystick && joyKnob) {
     } catch {
       // Safe to continue without capture.
     }
+    updateJoy(event.clientX, event.clientY);
   });
 
-  touchJoystick.addEventListener('pointermove', (event) => {
-    if (touch.joyId !== event.pointerId) return;
-    event.preventDefault();
-    const dx = event.clientX - touch.joyCenterX;
-    const dy = event.clientY - touch.joyCenterY;
+  const updateJoy = (clientX: number, clientY: number) => {
+    const dx = clientX - touch.joyCenterX;
+    const dy = clientY - touch.joyCenterY;
     const dist = Math.hypot(dx, dy) || 1;
     const clamped = Math.min(dist, radius);
     const nx = (dx / dist) * clamped;
     const ny = (dy / dist) * clamped;
     joyKnob.style.transform = `translate(${nx}px, ${ny}px)`;
-    // Map deflection to steering impulse (scaled like mouse). Pull down climbs.
-    const normX = nx / radius;
-    const normY = ny / radius;
-    steer.yaw = clamp(steer.yaw - normX * 0.09, -1.3, 1.3);
-    steer.pitch = clamp(steer.pitch + normY * 0.09, -1.3, 1.3);
+    // Store normalized deflection; applied continuously while held.
+    touch.joyX = nx / radius;
+    touch.joyY = ny / radius;
+  };
+
+  touchJoystick.addEventListener('pointermove', (event) => {
+    if (touch.joyId !== event.pointerId) return;
+    event.preventDefault();
+    updateJoy(event.clientX, event.clientY);
   });
 
   const endJoy = (event: PointerEvent) => {
     if (touch.joyId !== event.pointerId) return;
     event.preventDefault();
     touch.joyId = null;
+    touch.joyX = 0;
+    touch.joyY = 0;
     joyKnob.style.transform = 'translate(0px, 0px)';
     touchJoystick.classList.remove('is-active');
   };
@@ -550,8 +559,15 @@ function fixedStep(dt: number): void {
   );
   input.boost = keys.has('ShiftLeft') || keys.has('ShiftRight') || touch.boost;
 
-  // Let the mouse impulse bleed off so releasing the mouse settles the nose.
-  const decay = Math.exp(-12 * dt);
+  // Let the steering impulse bleed off so releasing settles the nose.
+  // While the touch joystick is held, apply its deflection continuously.
+  if (touch.joyId !== null) {
+    const joyRate = 12;
+    steer.pitch = clamp(steer.pitch + touch.joyY * joyRate * dt, -1.3, 1.3);
+    steer.yaw = clamp(steer.yaw - touch.joyX * joyRate * dt, -1.3, 1.3);
+  }
+
+  const decay = Math.exp((touch.joyId !== null ? -6 : -12) * dt);
   steer.pitch *= decay;
   steer.yaw *= decay;
   hitInvuln = Math.max(0, hitInvuln - dt);
