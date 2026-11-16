@@ -19,15 +19,15 @@ export const SHIP = {
   boostAccel: 105,
 
   /** Peak rotation rates, radians/sec. */
-  pitchRate: 5.5,
-  yawRate: 4.5,
-  rollRate: 6.0,
+  pitchRate: 8.0,
+  yawRate: 6.5,
+  rollRate: 8.0,
   /** Bank angle (radians) a full yaw input rolls toward, like a coordinated turn. */
   maxBank: 0.9,
   /** How hard the ship chases that bank angle (and wings-level when yaw is 0). */
-  bankResponse: 5.0,
+  bankResponse: 7.0,
   /** How fast angular velocity chases the stick. Lower = heavier, floatier. */
-  angularResponse: 14,
+  angularResponse: 18,
 
   /** W/S move the held throttle setting at this many speed units per second. */
   throttleRate: 46,

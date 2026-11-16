@@ -386,11 +386,11 @@ if (touchJoystick && joyKnob) {
     touch.joyY = ny / radius;
   };
 
-  touchJoystick.addEventListener('pointermove', (event) => {
+  const moveJoy = (event: PointerEvent) => {
     if (touch.joyId !== event.pointerId) return;
     event.preventDefault();
     updateJoy(event.clientX, event.clientY);
-  });
+  };
 
   const endJoy = (event: PointerEvent) => {
     if (touch.joyId !== event.pointerId) return;
@@ -401,8 +401,13 @@ if (touchJoystick && joyKnob) {
     joyKnob.style.transform = 'translate(0px, 0px)';
     touchJoystick.classList.remove('is-active');
   };
+
+  touchJoystick.addEventListener('pointermove', moveJoy);
   touchJoystick.addEventListener('pointerup', endJoy);
   touchJoystick.addEventListener('pointercancel', endJoy);
+  window.addEventListener('pointermove', moveJoy, { passive: false });
+  window.addEventListener('pointerup', endJoy);
+  window.addEventListener('pointercancel', endJoy);
 }
 
 if (isTouchDevice) {
