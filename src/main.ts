@@ -277,8 +277,8 @@ window.addEventListener('mousemove', (event) => {
   //
   // Flight-stick pitch: pulling the mouse *down* (movementY > 0) climbs, the way
   // a yoke works. This is the one sign that feels wrong if you expect FPS look.
-  steer.pitch = clamp(steer.pitch + event.movementY * 0.0055, -1.3, 1.3);
-  steer.yaw = clamp(steer.yaw - event.movementX * 0.0055, -1.3, 1.3);
+  steer.pitch = clamp(steer.pitch + event.movementY * 0.018, -1.3, 1.3);
+  steer.yaw = clamp(steer.yaw - event.movementX * 0.018, -1.3, 1.3);
 });
 
 function setTouchVisible(visible: boolean): void {
@@ -547,10 +547,12 @@ function fixedStep(dt: number): void {
   // Arrows follow the stick too: pulling back (ArrowDown) climbs.
   const keyPitch = (keys.has('ArrowDown') ? 1 : 0) - (keys.has('ArrowUp') ? 1 : 0);
   const keyYaw = (keys.has('ArrowLeft') ? 1 : 0) - (keys.has('ArrowRight') ? 1 : 0);
+  const joyPitch = touch.joyId !== null ? touch.joyY : 0;
+  const joyYaw = touch.joyId !== null ? -touch.joyX : 0;
   const touchThrottle = (touch.throttleUp ? 1 : 0) - (touch.throttleDown ? 1 : 0);
 
-  input.pitch = clamp(steer.pitch + keyPitch, -1, 1);
-  input.yaw = clamp(steer.yaw + keyYaw, -1, 1);
+  input.pitch = clamp(steer.pitch + keyPitch + joyPitch, -1, 1);
+  input.yaw = clamp(steer.yaw + keyYaw + joyYaw, -1, 1);
   input.roll = (keys.has('KeyA') ? 1 : 0) - (keys.has('KeyD') ? 1 : 0);
   input.throttle = clamp(
     (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0) + touchThrottle,
@@ -559,15 +561,13 @@ function fixedStep(dt: number): void {
   );
   input.boost = keys.has('ShiftLeft') || keys.has('ShiftRight') || touch.boost;
 
-  // Let the steering impulse bleed off so releasing settles the nose.
-  // While the touch joystick is held, apply its deflection continuously.
+  // Let mouse steering bleed off so releasing settles the nose. The touch
+  // joystick is applied as direct input below (like holding arrow keys).
   if (touch.joyId !== null) {
-    const joyRate = 12;
-    steer.pitch = clamp(steer.pitch + touch.joyY * joyRate * dt, -1.3, 1.3);
-    steer.yaw = clamp(steer.yaw - touch.joyX * joyRate * dt, -1.3, 1.3);
+    steer.pitch = 0;
+    steer.yaw = 0;
   }
-
-  const decay = Math.exp((touch.joyId !== null ? -6 : -12) * dt);
+  const decay = Math.exp(-8 * dt);
   steer.pitch *= decay;
   steer.yaw *= decay;
   hitInvuln = Math.max(0, hitInvuln - dt);
