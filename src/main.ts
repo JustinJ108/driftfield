@@ -277,8 +277,8 @@ window.addEventListener('mousemove', (event) => {
   //
   // Flight-stick pitch: pulling the mouse *down* (movementY > 0) climbs, the way
   // a yoke works. This is the one sign that feels wrong if you expect FPS look.
-  steer.pitch = clamp(steer.pitch + event.movementY * 0.012, -1.3, 1.3);
-  steer.yaw = clamp(steer.yaw - event.movementX * 0.012, -1.3, 1.3);
+  steer.pitch = clamp(steer.pitch + event.movementY * 0.005, -1.3, 1.3);
+  steer.yaw = clamp(steer.yaw - event.movementX * 0.005, -1.3, 1.3);
 });
 
 function setTouchVisible(visible: boolean): void {
